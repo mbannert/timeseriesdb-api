@@ -9,11 +9,35 @@
 //ini_set('display_startup_errors',1);
 //error_reporting(-1);
 
+
+date_default_timezone_set('America/New_York');
+
 require 'Slim/Slim.php';
 \Slim\Slim::registerAutoloader();
 
 # initialize the Slim framework
 $app = new \Slim\Slim();
+
+
+#########################
+## JSON ROUTE SINGLE TS #
+#########################
+$app->get('/timeseriesdb/json/:tskey', function ($tskey) {
+
+     $publicDbCon = dbConnect();
+     $json_obj = getSingleTs($publicDbCon,$tskey);
+
+     header('Content-Type: application/json');
+     echo json_encode($json_obj, JSON_PRETTY_PRINT);
+
+
+     pg_close($publicDbCon);
+
+});
+
+
+
+
 
 #########################
 ## CSV ROUTE SINGLE TS ##
@@ -26,26 +50,20 @@ $app->get('/timeseriesdb/csv/:tskey', function ($tskey) {
 
      # extract the array that contains the key value pairs... 
      $ts_key = $json_decoded['ts_key'];
+     $ts_frequency = $json_decoded['ts_frequency'];
      $ts_data_arr = $json_decoded['ts_data'];
-     # get keys and values to generate a 
-     # mini-arrays that can be used by fputcsv directly... 
-     $keys = array_keys($ts_data_arr);
-     $values = array_values($ts_data_arr);
 
-     # create a data array to hold the mini arrays
-     # mini arrays = rows
-     $data = array();
-     $length = count($keys);
-     for ($i = 0; $i < $length; $i++) {
-     $data[$i] = array($keys[$i],$values[$i]);
-     }
+     $filename = $tskey.".csv";     
 
      // send response headers to the browser
      header( 'Content-Type: text/csv' );
-     header( 'Content-Disposition: attachment;filename=out.csv');
+     header( "Content-Disposition: attachment;filename='".$filename."'");
      $fp = fopen('php://output', 'w');
 
-     foreach ($data as $row) {
+     # use the helper function the create
+     # the rows here...      
+     $rows = createArrayRows($ts_data_arr);
+     foreach ($rows as $row) {
         fputcsv($fp, $row);
      }
 
@@ -71,40 +89,34 @@ $app->get('/timeseriesdb/xlsx/:tskey', function ($tskey) {
 
      # extract the array that contains the key value pairs... 
      $ts_key = $json_decoded['ts_key'];
+     $ts_frequency = $json_decoded['ts_frequency'];
      $ts_data_arr = $json_decoded['ts_data'];
-     # get keys and values to generate a 
-     # mini-arrays that can be used by fputcsv directly... 
-     $keys = array_keys($ts_data_arr);
-     $values = array_values($ts_data_arr);
-
-     # create a data array to hold the mini arrays
-     # mini arrays = rows
-     $data = array();
-     $length = count($keys);
-     for ($i = 0; $i < $length; $i++) {
-     $data[$i] = array($keys[$i],floatval($values[$i]));
-     }
-
+     
      $filename = $tskey.".xlsx";
+
+     
      header('Content-disposition: attachment; filename="'.XLSXWriter::sanitize_filename($filename).'"');
      header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
      header('Content-Transfer-Encoding: binary');
      header('Cache-Control: must-revalidate');
      header('Pragma: public');
+
+
  
      $header = array(
       'date'=>'string',
-      'value'=>'string'
+      $tskey=>'string'
       );    
-
+     
+     $rows = createArrayRows($ts_data_arr);
      $writer = new XLSXWriter();
-     $writer->setAuthor('timeseriesdb API');
-     $writer->writeSheet($data,'Sheet1',$header);
+     $writer->setAuthor('KOF Swiss Economic Institute');
+     $writer->writeSheet($rows,'Sheet1',$header);
      $writer->writeToStdOut();
 
      exit(0);
 
-     // print_r($data);
+     print_r($data);
 
      pg_close($publicDbCon);
 
@@ -114,9 +126,48 @@ $app->get('/timeseriesdb/xlsx/:tskey', function ($tskey) {
 $app->run();
 
 
+# get quarter
+function getQuarterByMonth($monthNumber) {
+  return floor(($monthNumber - 1) / 3) + 1;
+}
+
+
+# create time series rows
+# might need to account for quarterly data here
+# at some point, for now it's fine..
+# maybe we also need classes and methods here
+function createArrayRows($tsdata_array){
+     # get keys and values to generate a 
+     # mini-arrays that can be used by fputcsv directly... 
+     $keys = array_keys($tsdata_array);
+     $values = array_values($tsdata_array);
+
+     # create a data array to hold the mini arrays
+     # mini arrays = rows
+
+     
+     $data = array();
+     $length = count($keys);
+     for ($i = 0; $i < $length; $i++) {
+
+      $d =  strtotime($keys[$i]);
+      $o = date("Y-m",$d);
+      #$m = date("m",$d);
+      #$mdate = $y." ".(int)$m;
+      # echo $mdate."-----";
+
+       $data[$i] = array($o,floatval($values[$i]));
+     
+     }
+     return($data);
+}
+
+
+
+
 # DB connection function including db strings
 function dbConnect($dbhost = "",
-                   $dbport = "",
+                   $dbport = "5432",
                    $dbname = "",
                    $dbuser = "",
                    $dbpass = ""){
