@@ -1,5 +1,5 @@
 # timeseriesdb-api
-RESTful APIs timeseriesdb: https://github.com/mbannert/timeseriesdb
+RESTful APIs for timeseriesdb: https://github.com/mbannert/timeseriesdb
 
 timeseriesdb is PostgreSQL based database and R package that maps R time series object into a PostgreSQL database. 
 However, particularly on the GET side you might want to access/export your data without using R. 
