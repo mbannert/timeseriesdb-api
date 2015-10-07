@@ -6,3 +6,13 @@ However, particularly on the GET side you might want to access/export your data 
 Here's a basic RESTful GET API that exports time series to CSV and xlsx. 
 
 Currently I am creating a PHP and nginx based API, nodejs and python are in the planning, too.  
+
+Ah, and I let 
+
+http://www.slimframework.com/
+
+and 
+
+https://github.com/mk-j/PHP_XLSXWriter
+
+do the hard work... thanks guys :)
