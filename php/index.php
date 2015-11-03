@@ -22,101 +22,88 @@ $app = new \Slim\Slim();
 #########################
 ## JSON ROUTE SINGLE TS #
 #########################
-$app->get('/timeseriesdb/json/:tskey', function ($tskey) {
+$app->get('/ts/:tskey', function ($tskey) use($app) {
 
+     # the parameter determines the output format
+     # might want to switch to a polymorphic version
+     # at some point
+     $paramValue = $app->request()->params('mime');
      $publicDbCon = dbConnect();
      $json_obj = getSingleTs($publicDbCon,$tskey);
 
-     header('Content-Type: application/json');
-     echo json_encode($json_obj, JSON_PRETTY_PRINT);
-
-
-     pg_close($publicDbCon);
-
-});
-
-
-
-
+     if($paramValue == 'json' || $paramValue == ''){
+        header('Content-Type: application/json');
+        echo json_encode($json_obj, JSON_PRETTY_PRINT);
 
 #########################
-## CSV ROUTE SINGLE TS ##
+## CSV OUTPUT          ##
 #########################
-$app->get('/timeseriesdb/csv/:tskey', function ($tskey) {
-    
-     $publicDbCon = dbConnect();
-     $json_obj = getSingleTs($publicDbCon,$tskey);
-     $json_decoded = json_decode($json_obj,true);
 
-     # extract the array that contains the key value pairs... 
-     $ts_key = $json_decoded['ts_key'];
-     $ts_frequency = $json_decoded['ts_frequency'];
-     $ts_data_arr = $json_decoded['ts_data'];
+     } elseif ($paramValue == 'csv'){
 
-     $filename = $tskey.".csv";     
+       $json_decoded = json_decode($json_obj,true);
 
-     // send response headers to the browser
-     header( 'Content-Type: text/csv' );
-     header( "Content-Disposition: attachment;filename='".$filename."'");
-     $fp = fopen('php://output', 'w');
+       # extract the array that contains the key value pairs... 
+       $ts_key = $json_decoded['ts_key'];
+       $ts_frequency = $json_decoded['ts_frequency'];
+       $ts_data_arr = $json_decoded['ts_data'];
 
-     # use the helper function the create
-     # the rows here...      
-     $rows = createArrayRows($ts_data_arr);
-     foreach ($rows as $row) {
-        fputcsv($fp, $row);
-     }
+       $filename = $tskey.".csv";
 
-     fclose($fp);
+       // send response headers to the browser
+       header( 'Content-Type: text/csv' );
+       header( "Content-Disposition: attachment;filename='".$filename."'");
+       $fp = fopen('php://output', 'w');
 
-     // print_r($data);
+       # use the helper function the create
+       # the rows here...      
+       $rows = createArrayRows($ts_data_arr);
+       foreach ($rows as $row) {
+         fputcsv($fp, $row);
+       }
 
-     pg_close($publicDbCon);
-
-});
-
+       fclose($fp);
+     } elseif ($paramValue == 'xlsx') {
 
 #########################
-## XLSX ROUTE SINGLE TS #
+## XLSX OUTPUT          #
 #########################
-$app->get('/timeseriesdb/xlsx/:tskey', function ($tskey) {
-     # thanks https://github.com/mk-j/PHP_XLSXWriter/
-     include_once("xlsxwriter/xlsxwriter.class.php");
 
-     $publicDbCon = dbConnect();
-     $json_obj = getSingleTs($publicDbCon,$tskey);
-     $json_decoded = json_decode($json_obj,true);
+        $json_decoded = json_decode($json_obj,true);
 
-     # extract the array that contains the key value pairs... 
-     $ts_key = $json_decoded['ts_key'];
-     $ts_frequency = $json_decoded['ts_frequency'];
-     $ts_data_arr = $json_decoded['ts_data'];
-     
-     $filename = $tskey.".xlsx";
+        # extract the array that contains the key value pairs... 
+        $ts_key = $json_decoded['ts_key'];
+        $ts_frequency = $json_decoded['ts_frequency'];
+        $ts_data_arr = $json_decoded['ts_data'];
 
-     
-     header('Content-disposition: attachment; filename="'.XLSXWriter::sanitize_filename($filename).'"');
-     header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-     header('Content-Transfer-Encoding: binary');
-     header('Cache-Control: must-revalidate');
-     header('Pragma: public');
+        $filename = $tskey.".xlsx";
+       include_once("xlsxwriter/xlsxwriter.class.php");
 
 
- 
-     $header = array(
-      'date'=>'string',
-      $tskey=>'string'
-      );    
-     
-     $rows = createArrayRows($ts_data_arr);
-     $writer = new XLSXWriter();
-     $writer->setAuthor('KOF Swiss Economic Institute');
-     $writer->writeSheet($rows,'Sheet1',$header);
-     $writer->writeToStdOut();
+        header('Content-disposition: attachment; filename="'.XLSXWriter::sanitize_filename($filename).'"');
+        header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        header('Content-Transfer-Encoding: binary');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
 
-     exit(0);
+        $header = array(
+         'date'=>'string',
+        $tskey=>'string'
+        );
 
-     print_r($data);
+        $rows = createArrayRows($ts_data_arr);
+        $writer = new XLSXWriter();
+        $writer->setAuthor('KOF Swiss Economic Institute');
+        $writer->writeSheet($rows,'Sheet1',$header);
+        $writer->writeToStdOut();
+
+     } else{
+     echo "Unsupported output type. Try to attach ?mime = json, csv or xlsx to your URL.";
+
+      }
+
+
+
 
      pg_close($publicDbCon);
 
@@ -145,7 +132,7 @@ function createArrayRows($tsdata_array){
      # create a data array to hold the mini arrays
      # mini arrays = rows
 
-     
+
      $data = array();
      $length = count($keys);
      for ($i = 0; $i < $length; $i++) {
@@ -157,17 +144,14 @@ function createArrayRows($tsdata_array){
       # echo $mdate."-----";
 
        $data[$i] = array($o,floatval($values[$i]));
-     
+
      }
      return($data);
 }
 
-
-
-
 # DB connection function including db strings
 function dbConnect($dbhost = "",
-                   $dbport = "5432",
+                   $dbport = "",
                    $dbname = "",
                    $dbuser = "",
                    $dbpass = ""){
@@ -178,7 +162,6 @@ function dbConnect($dbhost = "",
      return($dbcon);
 
 }
-
 
 # get a single time series from db and 
 # return it as a PHP StdClass Object
